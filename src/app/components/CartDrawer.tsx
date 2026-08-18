@@ -31,7 +31,7 @@ export default function CartDrawer() {
     setIsProcessing(true);
 
     try {
-      // 1. Verificar si el usuario ha iniciado sesión
+      // 1. Verificar sesión
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session?.user) {
@@ -41,7 +41,7 @@ export default function CartDrawer() {
         return;
       }
 
-      // 2. Mapear los items del carrito para guardarlos en formato JSONB
+      // 2. Mapear items
       const orderItems = items.map(({ product, quantity }) => ({
         id: product.id,
         name: product.name,
@@ -49,8 +49,8 @@ export default function CartDrawer() {
         quantity: quantity,
       }));
 
-      // 3. Registrar el pedido en la base de datos Supabase
-      const { data: orderData, error } = await supabase
+      // 3. Registrar el pedido en 'orders'
+      const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: session.user.id,
@@ -61,9 +61,27 @@ export default function CartDrawer() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (orderError) throw orderError;
 
-      // 4. Construir el mensaje formateado para WhatsApp
+      // 4. Descontar el stock de cada producto en la base de datos
+      for (const item of items) {
+        // Consultar el stock actual del producto
+        const { data: currentProduct } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.product.id)
+          .single();
+
+        if (currentProduct) {
+          const newStock = Math.max(0, currentProduct.stock - item.quantity);
+          await supabase
+            .from('products')
+            .update({ stock: newStock })
+            .eq('id', item.product.id);
+        }
+      }
+
+      // 5. Armar mensaje de WhatsApp
       let message = `🛒 *NUEVO PEDIDO EN CRAKCIO STORE*\n`;
       message += `----------------------------------------\n`;
       if (orderData?.id) {
@@ -81,13 +99,11 @@ export default function CartDrawer() {
       message += `----------------------------------------\n`;
       message += `¡Hola! Me gustaría coordinar el pago y envío de mi pedido.`;
 
-      // 5. Crear la URL de WhatsApp
       const whatsappUrl = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent(message)}`;
 
-      // 6. Limpiar el carrito, cerrar el modal y redirigir a WhatsApp
+      // 6. Limpiar carrito y abrir WhatsApp
       clearCart();
       closeCart();
-
       window.open(whatsappUrl, '_blank');
 
     } catch (error: any) {

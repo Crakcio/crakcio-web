@@ -12,20 +12,37 @@ interface NewProductForm {
   stock: string;
 }
 
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface Order {
+  id: string;
+  created_at: string;
+  user_id: string;
+  status: string;
+  total: number;
+  items: OrderItem[];
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [userEmail, setUserEmail] = useState<string>('');
 
+  // Pestaña activa: 'products' | 'orders'
+  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
+
+  // Estados de Productos
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-
-  // Estado para saber si estamos editando un producto existente
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-
   const [formData, setFormData] = useState<NewProductForm>({
     name: '',
     description: '',
@@ -33,13 +50,14 @@ export default function AdminPage() {
     stock: '10',
   });
 
- 
+  // Estados de Pedidos
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState<boolean>(true);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
-  
-  // 1. Verificar si hay sesión activa Y si es usuario Admin
+  // 1. Verificar Autenticación y Rol
   useEffect(() => {
     const checkAdminAndFetch = async () => {
-      // Forzar obtención limpia de sesión del cliente
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
       if (!user || userError) {
@@ -50,25 +68,20 @@ export default function AdminPage() {
 
       setUserEmail(user.email || '');
 
-      // Consultar el perfil comparando por ID o por Email como respaldo
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .or(`id.eq.${user.id},email.eq.${user.email}`)
         .maybeSingle();
 
-      console.log('Email detectado:', user.email);
-      console.log('ID del usuario:', user.id);
-      console.log('Perfil devuelto por Supabase:', profile);
-
       if (profileError) {
         console.error('Error al consultar perfil:', profileError.message);
       }
 
-      // Validar si el rol es realmente admin
       if (profile && profile.role === 'admin') {
         setIsAdmin(true);
         fetchProducts();
+        fetchOrders();
       } else {
         setIsAdmin(false);
       }
@@ -79,11 +92,9 @@ export default function AdminPage() {
     checkAdminAndFetch();
   }, [router]);
 
-
-
-
+  // Cargar Productos
   const fetchProducts = async () => {
-    setLoading(true);
+    setLoadingProducts(true);
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -94,10 +105,44 @@ export default function AdminPage() {
     } else if (data) {
       setProducts(data as Product[]);
     }
-    setLoading(false);
+    setLoadingProducts(false);
   };
 
-  // 2. Manejar envío (Crear o Editar)
+  // Cargar Pedidos
+  const fetchOrders = async () => {
+    setLoadingOrders(true);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error cargando pedidos:', error.message);
+    } else if (data) {
+      setOrders(data as Order[]);
+    }
+    setLoadingOrders(false);
+  };
+
+  // Cambiar estado de un pedido
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    setUpdatingOrderId(orderId);
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
+
+    if (error) {
+      alert('Error al actualizar el estado: ' + error.message);
+    } else {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      );
+    }
+    setUpdatingOrderId(null);
+  };
+
+  // Manejar Formulario de Productos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -105,7 +150,6 @@ export default function AdminPage() {
     try {
       let imageUrl = editingProduct ? editingProduct.image_url : '';
 
-      // Subir nueva imagen si el usuario seleccionó un archivo
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
@@ -125,7 +169,6 @@ export default function AdminPage() {
       }
 
       if (editingProduct) {
-        // Modo Edición
         const { error: updateError } = await supabase
           .from('products')
           .update({
@@ -140,7 +183,6 @@ export default function AdminPage() {
         if (updateError) throw updateError;
         alert('¡Producto actualizado con éxito!');
       } else {
-        // Modo Creación
         const { error: insertError } = await supabase.from('products').insert([
           {
             name: formData.name,
@@ -164,7 +206,6 @@ export default function AdminPage() {
     }
   };
 
-  // 3. Eliminar Producto
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`¿Estás seguro de que quieres eliminar "${name}"?`)) return;
 
@@ -179,7 +220,6 @@ export default function AdminPage() {
     }
   };
 
-  // 4. Preparar formulario para Edición
   const startEdit = (product: Product) => {
     setEditingProduct(product);
     setFormData({
@@ -192,29 +232,25 @@ export default function AdminPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Limpiar el formulario
   const resetForm = () => {
     setEditingProduct(null);
     setFormData({ name: '', description: '', price: '', stock: '10' });
     setImageFile(null);
   };
 
-  // Cerrar Sesión
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
   };
 
-  // Pantalla de carga mientras valida permisos
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center text-sm">
         Verificando permisos de administración...
       </div>
     );
   }
 
-  // Si la verificación terminó y NO es admin -> Bloquear acceso
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-4">
@@ -242,12 +278,14 @@ export default function AdminPage() {
     );
   }
 
-  // Si ES admin -> Renderizar Panel
   return (
-    <div className="p-8 max-w-4xl mx-auto text-white">
-      {/* Cabecera con botón de Cerrar Sesión */}
-      <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
-        <h1 className="text-2xl font-bold">Panel de Administración</h1>
+    <div className="p-4 sm:p-8 max-w-5xl mx-auto text-white">
+      {/* Cabecera */}
+      <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold">Panel de Administración</h1>
+          <p className="text-xs text-zinc-400">Crakcio Store Admin</p>
+        </div>
         <button
           onClick={handleLogout}
           className="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
@@ -256,135 +294,230 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Formulario de Crear / Editar */}
-      <form onSubmit={handleSubmit} className="space-y-4 bg-zinc-900 p-6 rounded-xl border border-zinc-800 mb-10">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold text-white">
-            {editingProduct ? `Editando: ${editingProduct.name}` : 'Agregar Nuevo Producto'}
-          </h2>
-          {editingProduct && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="text-sm text-zinc-400 hover:text-white underline"
-            >
-              Cancelar Edición
-            </button>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm text-zinc-400">Nombre</label>
-          <input
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm text-zinc-400">Descripción</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700 resize-none h-20"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-zinc-400">Precio ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              required
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400">Stock</label>
-            <input
-              type="number"
-              required
-              value={formData.stock}
-              onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-              className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm text-zinc-400">
-            {editingProduct ? 'Cambiar Imagen (opcional)' : 'Imagen del producto'}
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            className="w-full text-zinc-400 mt-1"
-          />
-        </div>
-
+      {/* Pestañas (Tabs) */}
+      <div className="flex space-x-2 border-b border-zinc-800 mb-8">
         <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 mt-2"
+          onClick={() => setActiveTab('products')}
+          className={`pb-3 px-4 font-semibold text-sm transition-colors border-b-2 ${
+            activeTab === 'products'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
         >
-          {submitting
-            ? 'Guardando...'
-            : editingProduct
-            ? 'Actualizar Producto'
-            : 'Guardar Producto'}
+          📦 Gestión de Productos ({products.length})
         </button>
-      </form>
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`pb-3 px-4 font-semibold text-sm transition-colors border-b-2 ${
+            activeTab === 'orders'
+              ? 'border-cyan-500 text-cyan-400'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
+        >
+          📋 Gestión de Pedidos ({orders.length})
+        </button>
+      </div>
 
-      {/* Lista de productos en la BD */}
-      <h2 className="text-xl font-bold mb-4">Productos en Catálogo ({products.length})</h2>
-      {loading ? (
-        <p className="text-zinc-500">Cargando catálogo...</p>
-      ) : (
-        <div className="space-y-3">
-          {products.map((p) => (
-            <div
-              key={p.id}
-              className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-4">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="w-14 h-14 object-cover rounded-lg" />
-                ) : (
-                  <div className="w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center text-xs text-zinc-500">
-                    Sin foto
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold text-white">{p.name}</h3>
-                  <p className="text-sm text-zinc-400">
-                    ${p.price} — <span className="text-zinc-500">Stock: {p.stock ?? 10}</span>
-                  </p>
-                </div>
+      {/* SECCIÓN 1: PRODUCTOS */}
+      {activeTab === 'products' && (
+        <div className="space-y-8">
+          {/* Formulario Crear / Editar */}
+          <form onSubmit={handleSubmit} className="space-y-4 bg-zinc-900 p-6 rounded-xl border border-zinc-800">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-lg font-semibold text-white">
+                {editingProduct ? `Editando: ${editingProduct.name}` : 'Agregar Nuevo Producto'}
+              </h2>
+              {editingProduct && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="text-sm text-zinc-400 hover:text-white underline"
+                >
+                  Cancelar Edición
+                </button>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm text-zinc-400">Nombre</label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-zinc-400">Descripción</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700 resize-none h-20 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-zinc-400">Precio ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700 focus:outline-none focus:border-blue-500"
+                />
               </div>
-
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => startEdit(p)}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded-lg text-sm transition-colors"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id, p.name)}
-                  className="bg-red-900/40 hover:bg-red-800/60 text-red-300 px-3 py-1.5 rounded-lg text-sm transition-colors border border-red-800/50"
-                >
-                  Eliminar
-                </button>
+              <div>
+                <label className="block text-sm text-zinc-400">Stock</label>
+                <input
+                  type="number"
+                  required
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  className="w-full bg-zinc-800 text-white p-3 rounded-lg mt-1 border border-zinc-700 focus:outline-none focus:border-blue-500"
+                />
               </div>
             </div>
-          ))}
+
+            <div>
+              <label className="block text-sm text-zinc-400">
+                {editingProduct ? 'Cambiar Imagen (opcional)' : 'Imagen del producto'}
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                className="w-full text-zinc-400 mt-1"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50 mt-2"
+            >
+              {submitting
+                ? 'Guardando...'
+                : editingProduct
+                ? 'Actualizar Producto'
+                : 'Guardar Producto'}
+            </button>
+          </form>
+
+          {/* Lista de productos */}
+          <div>
+            <h2 className="text-xl font-bold mb-4">Productos en Catálogo</h2>
+            {loadingProducts ? (
+              <p className="text-zinc-500 text-sm">Cargando catálogo...</p>
+            ) : products.length === 0 ? (
+              <p className="text-zinc-500 text-sm">No hay productos registrados.</p>
+            ) : (
+              <div className="space-y-3">
+                {products.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center space-x-4">
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="w-14 h-14 object-cover rounded-lg shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 bg-zinc-800 rounded-lg flex items-center justify-center text-xs text-zinc-500 shrink-0">
+                          Sin foto
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-bold text-white">{p.name}</h3>
+                        <p className="text-sm text-zinc-400">
+                          ${p.price} — <span className="text-zinc-500">Stock: {p.stock ?? 10}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex space-x-2 shrink-0">
+                      <button
+                        onClick={() => startEdit(p)}
+                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded-lg text-sm transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p.id, p.name)}
+                        className="bg-red-900/40 hover:bg-red-800/60 text-red-300 px-3 py-1.5 rounded-lg text-sm transition-colors border border-red-800/50"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SECCIÓN 2: PEDIDOS */}
+      {activeTab === 'orders' && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">Pedidos Recibidos</h2>
+          {loadingOrders ? (
+            <p className="text-zinc-500 text-sm">Cargando pedidos...</p>
+          ) : orders.length === 0 ? (
+            <p className="text-zinc-500 text-sm py-4">No hay pedidos registrados en la tienda.</p>
+          ) : (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-mono font-bold text-cyan-400">
+                        #{order.id.slice(0, 8)}
+                      </span>
+                      <span className="text-zinc-500">
+                        {new Date(order.created_at).toLocaleString('es-ES')}
+                      </span>
+                    </div>
+
+                    {/* Detalle de productos */}
+                    <div className="text-xs text-zinc-300 space-y-1">
+                      {Array.isArray(order.items) &&
+                        order.items.map((item, idx) => (
+                          <div key={idx}>
+                            • {item.name} <span className="text-zinc-500">x{item.quantity}</span> - ${(item.price * item.quantity).toFixed(2)}
+                          </div>
+                        ))}
+                    </div>
+
+                    <div className="text-xs font-bold text-white">
+                      Total: <span className="text-green-400">${Number(order.total).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Selector de Estado */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="text-xs text-zinc-400">Estado:</label>
+                    <select
+                      value={order.status}
+                      disabled={updatingOrderId === order.id}
+                      onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 border border-zinc-700 font-semibold focus:outline-none focus:border-cyan-500 text-white"
+                    >
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="Enviado">Enviado</option>
+                      <option value="Completado">Completado</option>
+                      <option value="Cancelado">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
