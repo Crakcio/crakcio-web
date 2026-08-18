@@ -1,0 +1,153 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useCartStore } from '@/lib/useCartStore';
+
+export default function CartDrawer() {
+  const {
+    items,
+    isOpen,
+    closeCart,
+    openCheckout,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    getTotalPrice,
+  } = useCartStore();
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Si no está montado o no está abierto, NO renderiza nada
+  if (!mounted || !isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      <div
+        onClick={closeCart}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+      />
+
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-md bg-slate-900 border-l border-slate-800 text-slate-100 flex flex-col justify-between shadow-2xl">
+          {/* Header */}
+          <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+              </svg>
+              <h2 className="text-xl font-bold">Tu Carrito</h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={closeCart}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors text-lg font-bold"
+            >
+              &times;
+            </button>
+          </div>
+
+          {/* Lista de Productos */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {items.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center text-slate-400">
+                <p className="text-lg font-medium mb-1">El carrito está vacío</p>
+                <p className="text-sm text-slate-500">Agrega productos desde el catálogo para continuar.</p>
+              </div>
+            ) : (
+              items.map(({ product, quantity }) => (
+                <div
+                  key={product.id}
+                  className="flex items-center gap-4 bg-slate-800/50 border border-slate-800 p-3 rounded-xl"
+                >
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-16 h-16 object-cover rounded-lg bg-slate-800"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-slate-800 rounded-lg flex items-center justify-center text-xs text-slate-500">
+                      Sin Foto
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-100 truncate">
+                      {product.name}
+                    </h3>
+                    <p className="text-xs text-indigo-400 font-bold mt-0.5">
+                      ${(product.price * quantity).toFixed(2)}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(product.id, quantity - 1)}
+                        className="w-6 h-6 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded text-xs text-white"
+                      >
+                        -
+                      </button>
+                      <span className="text-xs font-semibold px-1">
+                        {quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(product.id, quantity + 1)}
+                        className="w-6 h-6 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded text-xs text-white"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeFromCart(product.id)}
+                    className="text-slate-500 hover:text-red-400 p-1 transition-colors text-sm"
+                    title="Eliminar producto"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Footer */}
+          {items.length > 0 && (
+            <div className="p-6 border-t border-slate-800 bg-slate-900/90 space-y-4">
+              <div className="flex justify-between items-center text-slate-300 text-sm">
+                <span>Subtotal:</span>
+                <span className="text-xl font-bold text-white">
+                  ${getTotalPrice().toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={clearCart}
+                  className="w-1/3 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+                >
+                  Vaciar
+                </button>
+                <button
+                  type="button"
+                  onClick={openCheckout}
+                  className="w-2/3 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                >
+                  Finalizar Compra
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
