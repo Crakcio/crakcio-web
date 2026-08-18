@@ -15,6 +15,9 @@ interface NewProductForm {
 export default function AdminPage() {
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [userEmail, setUserEmail] = useState<string>('');
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -30,19 +33,38 @@ export default function AdminPage() {
     stock: '10',
   });
 
-  // 1. Verificar si hay sesión activa y cargar productos
+  // 1. Verificar si hay sesión activa Y si es usuario Admin
   useEffect(() => {
-    const checkUserAndFetch = async () => {
+    const checkAdminAndFetch = async () => {
       const { data: { user } } = await supabase.auth.getUser();
+
       if (!user) {
         router.push('/login');
-      } else {
-        setCheckingAuth(false);
-        fetchProducts();
+        return;
       }
+
+      setUserEmail(user.email || '');
+
+      // Consulta del rol en la tabla 'profiles'
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !profile || profile.role !== 'admin') {
+        setIsAdmin(false);
+        setCheckingAuth(false);
+        return;
+      }
+
+      // Si es admin
+      setIsAdmin(true);
+      setCheckingAuth(false);
+      fetchProducts();
     };
 
-    checkUserAndFetch();
+    checkAdminAndFetch();
   }, [router]);
 
   const fetchProducts = async () => {
@@ -168,14 +190,44 @@ export default function AdminPage() {
     router.push('/login');
   };
 
+  // Pantalla de carga mientras valida permisos
   if (checkingAuth) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        Verificando sesión...
+        Verificando permisos de administración...
       </div>
     );
   }
 
+  // Si la verificación terminó y NO es admin -> Bloquear acceso
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-4">
+        <div className="bg-zinc-900 border border-red-500/30 p-8 rounded-2xl max-w-md text-center shadow-xl">
+          <h1 className="text-2xl font-bold text-red-400 mb-2">Acceso Restringido 🚫</h1>
+          <p className="text-zinc-400 text-sm mb-6">
+            La cuenta <span className="text-white font-semibold">{userEmail}</span> no tiene permisos de administrador.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => router.push('/')}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-semibold px-4 py-2 rounded-xl border border-zinc-700 transition-all"
+            >
+              Volver a la Tienda
+            </button>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600/80 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Si ES admin -> Renderizar Panel
   return (
     <div className="p-8 max-w-4xl mx-auto text-white">
       {/* Cabecera con botón de Cerrar Sesión */}
