@@ -39,6 +39,7 @@ export default function AuthPage() {
     }
   };
 
+  
   // 1. Si el usuario ya inició sesión y vuelve a abrir esta página
   useEffect(() => {
     const checkExistingSession = async () => {

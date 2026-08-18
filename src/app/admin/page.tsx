@@ -33,39 +33,54 @@ export default function AdminPage() {
     stock: '10',
   });
 
+ 
+
+  
   // 1. Verificar si hay sesión activa Y si es usuario Admin
   useEffect(() => {
     const checkAdminAndFetch = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Forzar obtención limpia de sesión del cliente
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      if (!user) {
+      if (!user || userError) {
+        console.log('No hay usuario autenticado o hubo error:', userError);
         router.push('/login');
         return;
       }
 
       setUserEmail(user.email || '');
 
-      // Consulta del rol en la tabla 'profiles'
-      const { data: profile, error } = await supabase
+      // Consultar el perfil comparando por ID o por Email como respaldo
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.id)
-        .single();
+        .or(`id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle();
 
-      if (error || !profile || profile.role !== 'admin') {
-        setIsAdmin(false);
-        setCheckingAuth(false);
-        return;
+      console.log('Email detectado:', user.email);
+      console.log('ID del usuario:', user.id);
+      console.log('Perfil devuelto por Supabase:', profile);
+
+      if (profileError) {
+        console.error('Error al consultar perfil:', profileError.message);
       }
 
-      // Si es admin
-      setIsAdmin(true);
+      // Validar si el rol es realmente admin
+      if (profile && profile.role === 'admin') {
+        setIsAdmin(true);
+        fetchProducts();
+      } else {
+        setIsAdmin(false);
+      }
+
       setCheckingAuth(false);
-      fetchProducts();
     };
 
     checkAdminAndFetch();
   }, [router]);
+
+
+
 
   const fetchProducts = async () => {
     setLoading(true);
