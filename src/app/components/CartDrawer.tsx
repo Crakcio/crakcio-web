@@ -10,6 +10,9 @@ export default function CartDrawer() {
   const [isProcessing, setIsProcessing] = useState(false);
   const router = useRouter();
   
+  // NÚMERO DE WHATSAPP DE LA TIENDA (con código de país, ej: 51987654321)
+  const PHONE_NUMBER = '51987654321'; // 👈 CAMBIA ESTE NÚMERO POR EL TUYO
+
   // Extraemos las variables directamente de la store
   const isOpen = useCartStore((state) => state.isOpen);
   const items = useCartStore((state) => state.items);
@@ -23,7 +26,7 @@ export default function CartDrawer() {
     setMounted(true);
   }, []);
 
-  // Función para procesar el checkout en Supabase
+  // Función para procesar el checkout y enviar a WhatsApp
   const handleCheckout = async () => {
     setIsProcessing(true);
 
@@ -47,20 +50,45 @@ export default function CartDrawer() {
       }));
 
       // 3. Registrar el pedido en la base de datos Supabase
-      const { error } = await supabase.from('orders').insert({
-        user_id: session.user.id,
-        total: getTotalPrice(),
-        status: 'Completado',
-        items: orderItems,
-      });
+      const { data: orderData, error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: session.user.id,
+          total: getTotalPrice(),
+          status: 'Pendiente',
+          items: orderItems,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // 4. Limpiar el carrito, cerrar el drawer y llevar al usuario a su perfil
+      // 4. Construir el mensaje formateado para WhatsApp
+      let message = `🛒 *NUEVO PEDIDO EN CRAKCIO STORE*\n`;
+      message += `----------------------------------------\n`;
+      if (orderData?.id) {
+        message += `📋 *Pedido ID:* #${orderData.id.slice(0, 8)}\n`;
+      }
+      message += `👤 *Cliente:* ${session.user.email}\n\n`;
+      message += `📦 *Detalle del Pedido:*\n`;
+
+      items.forEach(({ product, quantity }) => {
+        const subtotal = (product.price * quantity).toFixed(2);
+        message += `• ${product.name} x${quantity} - $${subtotal}\n`;
+      });
+
+      message += `\n💵 *TOTAL:* $${getTotalPrice().toFixed(2)}\n`;
+      message += `----------------------------------------\n`;
+      message += `¡Hola! Me gustaría coordinar el pago y envío de mi pedido.`;
+
+      // 5. Crear la URL de WhatsApp
+      const whatsappUrl = `https://wa.me/${PHONE_NUMBER}?text=${encodeURIComponent(message)}`;
+
+      // 6. Limpiar el carrito, cerrar el modal y redirigir a WhatsApp
       clearCart();
       closeCart();
-      alert('¡Compra realizada con éxito!');
-      router.push('/perfil');
+
+      window.open(whatsappUrl, '_blank');
 
     } catch (error: any) {
       console.error('Error al procesar el pedido:', error);
@@ -189,9 +217,9 @@ export default function CartDrawer() {
                   type="button"
                   onClick={handleCheckout}
                   disabled={isProcessing}
-                  className="w-2/3 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                  className="w-2/3 py-2.5 px-4 bg-green-600 hover:bg-green-500 active:scale-95 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-green-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isProcessing ? 'Procesando...' : 'Finalizar Compra'}
+                  {isProcessing ? 'Procesando...' : '📱 Comprar por WhatsApp'}
                 </button>
               </div>
             </div>
