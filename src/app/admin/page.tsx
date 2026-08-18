@@ -58,35 +58,38 @@ export default function AdminPage() {
   // 1. Verificar Autenticación y Rol
   useEffect(() => {
     const checkAdminAndFetch = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-      if (!user || userError) {
-        console.log('No hay usuario autenticado o hubo error:', userError);
-        router.push('/login');
-        return;
+        if (!user || userError) {
+          console.log('No hay usuario autenticado o hubo error:', userError);
+          router.push('/login');
+          return;
+        }
+
+        setUserEmail(user.email || '');
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .or(`id.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('Error al consultar perfil:', profileError.message);
+        }
+
+        if (profile && profile.role === 'admin') {
+          setIsAdmin(true);
+          await Promise.all([fetchProducts(), fetchOrders()]);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err: any) {
+        console.error('Error en autenticación:', err.message);
+      } finally {
+        setCheckingAuth(false);
       }
-
-      setUserEmail(user.email || '');
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .or(`id.eq.${user.id},email.eq.${user.email}`)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Error al consultar perfil:', profileError.message);
-      }
-
-      if (profile && profile.role === 'admin') {
-        setIsAdmin(true);
-        fetchProducts();
-        fetchOrders();
-      } else {
-        setIsAdmin(false);
-      }
-
-      setCheckingAuth(false);
     };
 
     checkAdminAndFetch();
@@ -175,7 +178,7 @@ export default function AdminPage() {
             name: formData.name,
             description: formData.description,
             price: parseFloat(formData.price),
-            stock: parseInt(formData.stock),
+            stock: parseInt(formData.stock, 10),
             image_url: imageUrl,
           })
           .eq('id', editingProduct.id);
@@ -188,7 +191,7 @@ export default function AdminPage() {
             name: formData.name,
             description: formData.description,
             price: parseFloat(formData.price),
-            stock: parseInt(formData.stock),
+            stock: parseInt(formData.stock, 10),
             image_url: imageUrl,
           },
         ]);
@@ -284,7 +287,7 @@ export default function AdminPage() {
       <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold">Panel de Administración</h1>
-          <p className="text-xs text-zinc-400">Crakcio Store Admin</p>
+          <p className="text-xs text-zinc-400">Crakcio Admin</p>
         </div>
         <button
           onClick={handleLogout}
