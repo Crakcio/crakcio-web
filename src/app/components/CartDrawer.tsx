@@ -4,25 +4,24 @@ import { useEffect, useState } from 'react';
 import { useCartStore } from '@/lib/useCartStore';
 
 export default function CartDrawer() {
-  const {
-    items,
-    isOpen,
-    closeCart,
-    openCheckout,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    getTotalPrice,
-  } = useCartStore();
-
   const [mounted, setMounted] = useState(false);
+  
+  // Extraemos las variables directamente de la store
+  const isOpen = useCartStore((state) => state.isOpen);
+  const items = useCartStore((state) => state.items);
+  const closeCart = useCartStore((state) => state.closeCart);
+  const openCheckout = useCartStore((state) => state.openCheckout);
+  const removeFromCart = useCartStore((state) => state.removeFromCart);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const clearCart = useCartStore((state) => state.clearCart);
+  const getTotalPrice = useCartStore((state) => state.getTotalPrice);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Si no está montado o no está abierto, NO renderiza nada
   if (!mounted || !isOpen) return null;
+
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
