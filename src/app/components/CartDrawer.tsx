@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useCartStore } from '@/lib/useCartStore';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function CartDrawer() {
   const [mounted, setMounted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const router = useRouter();
   
   // Extraemos las variables directamente de la store
   const isOpen = useCartStore((state) => state.isOpen);
   const items = useCartStore((state) => state.items);
   const closeCart = useCartStore((state) => state.closeCart);
-  const openCheckout = useCartStore((state) => state.openCheckout);
   const removeFromCart = useCartStore((state) => state.removeFromCart);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const clearCart = useCartStore((state) => state.clearCart);
@@ -20,8 +23,54 @@ export default function CartDrawer() {
     setMounted(true);
   }, []);
 
-  if (!mounted || !isOpen) return null;
+  // Función para procesar el checkout en Supabase
+  const handleCheckout = async () => {
+    setIsProcessing(true);
 
+    try {
+      // 1. Verificar si el usuario ha iniciado sesión
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        alert('Debes iniciar sesión para realizar la compra.');
+        closeCart();
+        router.push('/login');
+        return;
+      }
+
+      // 2. Mapear los items del carrito para guardarlos en formato JSONB
+      const orderItems = items.map(({ product, quantity }) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: quantity,
+      }));
+
+      // 3. Registrar el pedido en la base de datos Supabase
+      const { error } = await supabase.from('orders').insert({
+        user_id: session.user.id,
+        total: getTotalPrice(),
+        status: 'Completado',
+        items: orderItems,
+      });
+
+      if (error) throw error;
+
+      // 4. Limpiar el carrito, cerrar el drawer y llevar al usuario a su perfil
+      clearCart();
+      closeCart();
+      alert('¡Compra realizada con éxito!');
+      router.push('/perfil');
+
+    } catch (error: any) {
+      console.error('Error al procesar el pedido:', error);
+      alert('Ocurrió un error al procesar tu compra: ' + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (!mounted || !isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -131,16 +180,18 @@ export default function CartDrawer() {
                 <button
                   type="button"
                   onClick={clearCart}
-                  className="w-1/3 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+                  disabled={isProcessing}
+                  className="w-1/3 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition-colors disabled:opacity-50"
                 >
                   Vaciar
                 </button>
                 <button
                   type="button"
-                  onClick={openCheckout}
-                  className="w-2/3 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                  onClick={handleCheckout}
+                  disabled={isProcessing}
+                  className="w-2/3 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
                 >
-                  Finalizar Compra
+                  {isProcessing ? 'Procesando...' : 'Finalizar Compra'}
                 </button>
               </div>
             </div>
