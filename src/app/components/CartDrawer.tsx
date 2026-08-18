@@ -11,7 +11,7 @@ export default function CartDrawer() {
   const router = useRouter();
   
   // NÚMERO DE WHATSAPP DE LA TIENDA (con código de país, ej: 51987654321)
-  const PHONE_NUMBER = '51987654321'; // 👈 CAMBIA ESTE NÚMERO POR EL TUYO
+  const PHONE_NUMBER = '51999207025'; // 👈 CAMBIA ESTE NÚMERO POR EL TUYO
 
   // Extraemos las variables directamente de la store
   const isOpen = useCartStore((state) => state.isOpen);
