@@ -90,9 +90,19 @@ export default function Navbar({ onSearch }: NavbarProps) {
           </div>
         </div>
 
-        {/* CONTROLES Y ACCIONES (TEMA, PERFIL/LOGIN, CARRITO) */}
+        {/* CONTROLES Y ACCIONES (JUEGOS, TEMA, PERFIL/LOGIN, CARRITO) */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
+          {/* Botón Acceso a la Zona de Juegos */}
+          <Link
+            href="/juegos"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/20 to-cyan-600/20 [.light_&]:from-purple-100 [.light_&]:to-cyan-100 [.gamer_&]:from-fuchsia-900/40 [.gamer_&]:to-cyan-900/40 text-cyan-300 [.light_&]:text-purple-800 [.gamer_&]:text-fuchsia-300 border border-cyan-500/30 [.light_&]:border-purple-300 [.gamer_&]:border-fuchsia-500/50 hover:border-cyan-400 hover:scale-105 transition-all text-xs font-bold flex items-center gap-1.5 shadow-sm"
+            title="Zona de Juegos y Recompensas"
+          >
+            <span>🎮</span>
+            <span>Juegos</span>
+          </Link>
+
           {/* Selector de Tema */}
           <ThemeToggle />
 
