@@ -27,19 +27,18 @@ export default function AuthPage() {
 
       if (error) console.error('Error obteniendo perfil:', error.message);
 
-      // Si el rol es admin -> va a /admin. Si es user o no definido -> va a la tienda '/'
+      // Si el rol es admin -> va a /admin. Si es cliente -> va a su perfil '/perfil'
       if (profile && profile.role === 'admin') {
         window.location.href = '/admin';
       } else {
-        window.location.href = '/';
+        window.location.href = '/perfil'; // Redirección a la vista de usuario
       }
     } catch (err) {
       console.error(err);
-      window.location.href = '/';
+      window.location.href = '/perfil'; // En caso de fallo, redirige por defecto a perfil
     }
   };
 
-  
   // 1. Si el usuario ya inició sesión y vuelve a abrir esta página
   useEffect(() => {
     const checkExistingSession = async () => {

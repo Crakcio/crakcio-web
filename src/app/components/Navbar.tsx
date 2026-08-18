@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCartStore } from '@/lib/useCartStore';
+import { supabase } from '@/lib/supabase';
 import ThemeToggle from './ThemeToggle';
 
 interface NavbarProps {
@@ -12,6 +13,41 @@ interface NavbarProps {
 export default function Navbar({ onSearch }: NavbarProps) {
   const { items, openCart } = useCartStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Consultar sesión y rol del usuario al cargar
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setIsLoggedIn(true);
+
+        // Consultar el rol en la tabla profiles
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (profile?.role) {
+          setUserRole(profile.role);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setUserRole(null);
+      }
+    };
+
+    checkUserRole();
+  }, []);
+
+  // Determinar a qué página debe dirigir el botón de usuario
+  const getProfileLink = () => {
+    if (!isLoggedIn) return '/login';
+    return userRole === 'admin' ? '/admin' : '/perfil';
+  };
 
   // Calcular la cantidad total de productos en el carrito
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -54,19 +90,30 @@ export default function Navbar({ onSearch }: NavbarProps) {
           </div>
         </div>
 
-        {/* CONTROLES Y ACCIONES (TEMA, ADMIN/LOGIN, CARRITO) */}
+        {/* CONTROLES Y ACCIONES (TEMA, PERFIL/LOGIN, CARRITO) */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
           {/* Selector de Tema */}
           <ThemeToggle />
 
-          {/* Icono de Login / Admin */}
+          {/* Icono de Perfil / Login / Admin */}
           <Link
-            href="/admin"
-            className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 [.light_&]:bg-zinc-100 [.light_&]:hover:bg-zinc-200 [.gamer_&]:bg-[#190a38] [.gamer_&]:hover:bg-fuchsia-900/50 border border-zinc-700 [.light_&]:border-zinc-300 [.gamer_&]:border-fuchsia-500/50 transition-all text-white [.light_&]:text-zinc-800 flex items-center justify-center"
-            title="Panel de Admin / Iniciar Sesión"
+            href={getProfileLink()}
+            className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 [.light_&]:bg-zinc-100 [.light_&]:hover:bg-zinc-200 [.gamer_&]:bg-[#190a38] [.gamer_&]:hover:bg-fuchsia-900/50 border border-zinc-700 [.light_&]:border-zinc-300 [.gamer_&]:border-fuchsia-500/50 transition-all text-white [.light_&]:text-zinc-800 flex items-center justify-center gap-1.5"
+            title={
+              !isLoggedIn
+                ? 'Iniciar Sesión'
+                : userRole === 'admin'
+                ? 'Panel de Administración'
+                : 'Mi Perfil'
+            }
           >
-            👤
+            <span>👤</span>
+            {isLoggedIn && userRole === 'admin' && (
+              <span className="text-[9px] bg-red-600/90 text-white font-black px-1.5 py-0.5 rounded uppercase tracking-wider hidden md:inline-block">
+                Admin
+              </span>
+            )}
           </Link>
 
           {/* Botón Carrito de Compras */}
